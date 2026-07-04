@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/
+db.sqlite3
+/static/
+/staticfiles/
+ml/artifacts/
+ml/data/raw/
+ml/data/processed/
