@@ -1,21 +1,13 @@
-"""
-ml/vectorize.py
-Reads the cleaned CSV, builds a Bag-of-Words matrix from the 'tags'
-column, computes cosine similarity between all anime, and saves both
-the anime dataframe and similarity matrix as pickle files.
-"""
-
 import pandas as pd
 import pickle
 import os
+import numpy as np
 from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 
-PROCESSED_PATH = os.path.join("ml", "data", "processed", "anime_cleaned.csv")
-ARTIFACTS_DIR  = os.path.join("ml", "artifacts")
-
+PROCESSED_PATH      = os.path.join("ml", "data", "processed", "anime_cleaned.csv")
+ARTIFACTS_DIR       = os.path.join("ml", "artifacts")
 ANIME_PKL_PATH      = os.path.join(ARTIFACTS_DIR, "anime_list.pkl")
-SIMILARITY_PKL_PATH = os.path.join(ARTIFACTS_DIR, "similarity.pkl")
+VECTORS_PKL_PATH    = os.path.join(ARTIFACTS_DIR, "vectors.pkl")
 
 
 def load_cleaned_data(path=PROCESSED_PATH):
@@ -23,43 +15,38 @@ def load_cleaned_data(path=PROCESSED_PATH):
     return df
 
 
-def build_similarity_matrix(df):
-    """
-    CountVectorizer tokenizes the 'tags' string into individual words
-    and builds a word-count matrix of shape (num_anime, vocab_size).
-    cosine_similarity then gives us an (num_anime, num_anime) matrix
-    where entry [i][j] is how similar anime i is to anime j.
-    """
+def build_vectors(df):
     cv = CountVectorizer(max_features=5000, stop_words="english")
     vectors = cv.fit_transform(df["tags"]).toarray()
 
-    print(f"Vocabulary size  : {len(cv.vocabulary_)}")
-    print(f"Vectors shape    : {vectors.shape}")
+    # Save as float32 to cut memory in half
+    vectors = vectors.astype(np.float32)
 
-    similarity = cosine_similarity(vectors)
-    print(f"Similarity matrix: {similarity.shape}")
+    print(f"Vocabulary size : {len(cv.vocabulary_)}")
+    print(f"Vectors shape   : {vectors.shape}")
+    print(f"Vectors size    : {vectors.nbytes / 1024 / 1024:.2f} MB")
 
-    return similarity
+    return vectors
 
 
-def save_artifacts(df, similarity):
+def save_artifacts(df, vectors):
     os.makedirs(ARTIFACTS_DIR, exist_ok=True)
 
     with open(ANIME_PKL_PATH, "wb") as f:
         pickle.dump(df, f)
 
-    with open(SIMILARITY_PKL_PATH, "wb") as f:
-        pickle.dump(similarity, f)
+    with open(VECTORS_PKL_PATH, "wb") as f:
+        pickle.dump(vectors, f)
 
-    print(f"Saved anime_list.pkl   -> {ANIME_PKL_PATH}")
-    print(f"Saved similarity.pkl   -> {SIMILARITY_PKL_PATH}")
+    print(f"Saved anime_list.pkl -> {ANIME_PKL_PATH}")
+    print(f"Saved vectors.pkl    -> {VECTORS_PKL_PATH}")
 
 
 def vectorize():
     df = load_cleaned_data()
-    similarity = build_similarity_matrix(df)
-    save_artifacts(df, similarity)
-    return df, similarity
+    vectors = build_vectors(df)
+    save_artifacts(df, vectors)
+    return df, vectors
 
 
 if __name__ == "__main__":
