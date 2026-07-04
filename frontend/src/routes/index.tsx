@@ -7,7 +7,6 @@ export const Route = createFileRoute("/")({
 
 const API = "https://mikata-backend.onrender.com/api";
 
-
 type Anime = {
   anime_id: number;
   name: string;
@@ -42,29 +41,17 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-  (async () => {
-    setLoadingFeatured(true);
-    try {
-      const res = await fetch(
-        "https://api.jikan.moe/v4/top/anime?type=tv&filter=bypopularity&limit=18"
-      );
-      const j = await res.json();
-      const list: Anime[] = (j.data ?? []).map((a: any) => ({
-        anime_id: a.mal_id,
-        name: a.title,
-        genre: (a.genres ?? []).map((g: any) => g.name).join(", "),
-        type: a.type ?? "TV",
-        episodes: a.episodes ?? 0,
-        rating: a.score ?? 0,
-      }));
-      setFeatured(list);
-    } catch {
-      // silent fail — grid stays empty
-    } finally {
-      setLoadingFeatured(false);
-    }
-  })();
-}, []);
+    let cancelled = false;
+    const t = setTimeout(() => {
+      fetchPoster(anime.anime_id).then((url) => {
+        if (!cancelled) setPoster(url);
+      });
+    }, (index % 10) * 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [anime.anime_id, index]);
 
   const genres = anime.genre?.split(",").map((g) => g.trim()).filter(Boolean) ?? [];
 
@@ -74,7 +61,6 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
       className="group relative flex flex-col overflow-hidden rounded-lg bg-card text-left card-ring transition-all duration-500 hover:-translate-y-1.5 hover:card-ring-hover animate-fade-up"
       style={{ animationDelay: `${Math.min(index * 40, 500)}ms` }}
     >
-      {/* Corner marks — editorial detail */}
       <span aria-hidden className="pointer-events-none absolute left-2 top-2 z-20 h-3 w-3 border-l border-t border-crimson-glow/70" />
       <span aria-hidden className="pointer-events-none absolute right-2 top-2 z-20 h-3 w-3 border-r border-t border-crimson-glow/0 group-hover:border-crimson-glow/70 transition-colors duration-500" />
       <span aria-hidden className="pointer-events-none absolute left-2 bottom-2 z-20 h-3 w-3 border-l border-b border-crimson-glow/0 group-hover:border-crimson-glow/70 transition-colors duration-500" />
@@ -97,19 +83,14 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
           </div>
         )}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink via-ink/60 to-transparent" />
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-crimson/0 via-transparent to-crimson/0 opacity-0 group-hover:opacity-30 transition-opacity duration-500" style={{ background: "linear-gradient(135deg, oklch(0.68 0.23 24 / 0.15), transparent 40%)" }} />
 
-        {/* Rating stripe */}
         <div className="absolute left-3 top-3 z-10 flex items-center gap-1 rounded-sm border border-crimson/30 bg-ink/85 px-2 py-1 backdrop-blur-md">
           <span className="text-[10px] leading-none text-crimson-glow">★</span>
           <span className="text-xs font-semibold tabular-nums leading-none">{anime.rating?.toFixed(2) ?? "—"}</span>
         </div>
-        {/* Type badge — hanko-style */}
         <div className="absolute right-3 top-3 z-10 seal px-2 py-1 text-[10px] uppercase tracking-widest">
           {anime.type || "TV"}
         </div>
-
-        {/* Vertical katakana-like rail at bottom */}
         <div className="pointer-events-none absolute bottom-2 right-2 z-10 flex items-center gap-1 text-[9px] uppercase tracking-[0.3em] text-parchment/70">
           <span className="h-px w-6 bg-parchment/40" />
           <span className="font-jp">作品</span>
@@ -117,7 +98,6 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
       </div>
 
       <div className="relative flex flex-1 flex-col gap-2.5 p-4">
-        {/* index number, editorial */}
         <span className="absolute right-3 top-3 font-jp text-[10px] tracking-widest text-muted-foreground/60 tabular-nums">
           №{String(index + 1).padStart(3, "0")}
         </span>
@@ -185,24 +165,29 @@ function Mikata() {
   const [featured, setFeatured] = useState<Anime[]>([]);
   const recsRef = useRef<HTMLDivElement>(null);
 
-  // Load featured with fallback seeds
+  // Load trending from Jikan
   useEffect(() => {
     (async () => {
       setLoadingFeatured(true);
-      for (const seed of FEATURED_SEEDS) {
-        try {
-          const res = await fetch(`${API}/search/?q=${seed}`);
-          const j = await res.json();
-          const list: Anime[] = j.results ?? [];
-          if (list.length) {
-            setFeatured(list);
-            break;
-          }
-        } catch {
-          /* try next */
-        }
+      try {
+        const res = await fetch(
+          "https://api.jikan.moe/v4/top/anime?type=tv&filter=bypopularity&limit=18"
+        );
+        const j = await res.json();
+        const list: Anime[] = (j.data ?? []).map((a: any) => ({
+          anime_id: a.mal_id,
+          name: a.title,
+          genre: (a.genres ?? []).map((g: any) => g.name).join(", "),
+          type: a.type ?? "TV",
+          episodes: a.episodes ?? 0,
+          rating: a.score ?? 0,
+        }));
+        setFeatured(list);
+      } catch {
+        // silent fail
+      } finally {
+        setLoadingFeatured(false);
       }
-      setLoadingFeatured(false);
     })();
   }, []);
 
@@ -261,21 +246,15 @@ function Mikata() {
 
   return (
     <div className="relative min-h-screen">
-      {/* Fixed vertical rail — tategaki (only on very wide screens where it won't collide) */}
       <div className="pointer-events-none fixed left-3 top-1/2 z-10 hidden -translate-y-1/2 2xl:block">
         <div className="flex flex-col items-center gap-3">
           <div className="h-12 w-px bg-gradient-to-b from-transparent to-crimson/60" />
-          <div className="tategaki font-jp text-[9px] font-medium tracking-[0.5em] text-crimson-glow/70">
-            味方
-          </div>
+          <div className="tategaki font-jp text-[9px] font-medium tracking-[0.5em] text-crimson-glow/70">味方</div>
           <div className="h-12 w-px bg-gradient-to-b from-crimson/60 to-transparent" />
         </div>
       </div>
 
-
-      {/* Header */}
       <header className="relative overflow-hidden">
-        {/* Giant background kanji */}
         <div className="pointer-events-none absolute inset-0" aria-hidden>
           <div className="absolute -right-16 -top-24 select-none font-jp text-[26rem] font-black leading-none text-crimson/[0.055] animate-float-slow">
             味方
@@ -284,24 +263,18 @@ function Mikata() {
             推
           </div>
         </div>
-        {/* Torii-red top stripe */}
         <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-crimson to-transparent opacity-70" />
 
         <div className="relative mx-auto max-w-7xl px-6 pb-14 pt-10 sm:pt-16">
-          {/* Brand + meta bar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="seal animate-seal h-11 w-11 rounded-md text-xl">
-                味
-              </div>
+              <div className="seal animate-seal h-11 w-11 rounded-md text-xl">味</div>
               <div>
                 <div className="flex items-baseline gap-2">
                   <span className="font-display text-2xl font-bold tracking-tight">Mikata</span>
                   <span className="font-jp text-crimson-glow text-glow">味方</span>
                 </div>
-                <div className="text-[10px] uppercase tracking-[0.35em] text-muted-foreground">
-                  Your ally in anime
-                </div>
+                <div className="text-[10px] uppercase tracking-[0.35em] text-muted-foreground">Your ally in anime</div>
               </div>
             </div>
             <div className="hidden items-center gap-3 sm:flex">
@@ -311,7 +284,6 @@ function Mikata() {
             </div>
           </div>
 
-          {/* Hero */}
           <div className="mt-16 grid gap-10 md:grid-cols-[1.4fr_1fr] md:items-end">
             <div className="max-w-3xl">
               <div className="mb-5 flex items-center gap-3">
@@ -331,7 +303,6 @@ function Mikata() {
                 <span className="text-crimson-glow"> curated recommendations</span> — hand-picked for taste, not trends.
               </p>
             </div>
-            {/* Editorial side card */}
             <div className="relative hidden md:block">
               <div className="rounded-lg border border-crimson/20 bg-card/60 p-5 backdrop-blur-sm card-ring">
                 <div className="font-jp text-[10px] uppercase tracking-[0.35em] text-crimson-glow">案内 · Guide</div>
@@ -350,7 +321,6 @@ function Mikata() {
             </div>
           </div>
 
-          {/* Search */}
           <div className="relative mt-10 max-w-2xl">
             <div className="absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-crimson/20 via-crimson-glow/25 to-crimson/20 blur-2xl" />
             <div className="flex items-center gap-3 rounded-xl border border-border bg-card/85 px-4 py-3.5 backdrop-blur-md transition-all duration-300 focus-within:border-crimson/60 focus-within:ring-2 focus-within:ring-crimson/30 focus-within:bg-card">
@@ -378,7 +348,6 @@ function Mikata() {
                 </button>
               )}
             </div>
-            {/* Suggestion chips */}
             {!query && (
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Try</span>
@@ -395,21 +364,17 @@ function Mikata() {
             )}
           </div>
         </div>
-        {/* Bottom hairline */}
         <div className="hairline-divider mx-auto max-w-7xl opacity-60" />
       </header>
 
-      {/* Main */}
       <main className="relative mx-auto max-w-7xl px-6 py-14">
         <div className="mb-8 flex items-end justify-between gap-4">
-          <div className="flex items-end gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="h-px w-6 bg-crimson" />
-                <span className="font-jp text-[10px] uppercase tracking-[0.4em] text-crimson-glow">検索 · Discover</span>
-              </div>
-              <h2 className="mt-2 font-display text-2xl font-bold sm:text-3xl">{heading}</h2>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="h-px w-6 bg-crimson" />
+              <span className="font-jp text-[10px] uppercase tracking-[0.4em] text-crimson-glow">検索 · Discover</span>
             </div>
+            <h2 className="mt-2 font-display text-2xl font-bold sm:text-3xl">{heading}</h2>
           </div>
           {loadingSearch && (
             <span className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
@@ -436,7 +401,6 @@ function Mikata() {
           <Grid items={displayed} onPick={pick} />
         )}
 
-        {/* Recommendations */}
         {(selected || loadingRecs) && (
           <section ref={recsRef} className="mt-24 scroll-mt-8">
             <div className="mb-10">
@@ -453,7 +417,6 @@ function Mikata() {
                 Similar in spirit, genre, and vibe — a lineage of stories that share its soul.
               </p>
             </div>
-
             {loadingRecs ? (
               <GridSkeleton count={10} />
             ) : recs.length > 0 ? (
@@ -471,12 +434,8 @@ function Mikata() {
         <div className="hairline-divider mb-8 opacity-60" />
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="seal h-10 w-10 rounded-md text-lg">味</div>
-          <div className="font-jp text-xs uppercase tracking-[0.4em] text-muted-foreground">
-            味方 · Mikata
-          </div>
-          <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70">
-            An ally for anime lovers
-          </div>
+          <div className="font-jp text-xs uppercase tracking-[0.4em] text-muted-foreground">味方 · Mikata</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70">An ally for anime lovers</div>
         </div>
       </footer>
     </div>
