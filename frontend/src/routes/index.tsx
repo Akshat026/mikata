@@ -14,6 +14,7 @@ type Anime = {
   type: string;
   episodes: number;
   rating: number;
+  poster?: string | null;
 };
 
 const posterCache = new Map<number, string | null>();
@@ -41,6 +42,11 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
+    // If poster already provided (from trending), use it directly — no API call needed
+    if (anime.poster) {
+      setPoster(anime.poster);
+      return;
+    }
     let cancelled = false;
     const t = setTimeout(() => {
       fetchPoster(anime.anime_id).then((url) => {
@@ -51,7 +57,7 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
       cancelled = true;
       clearTimeout(t);
     };
-  }, [anime.anime_id, index]);
+  }, [anime.anime_id, anime.poster, index]);
 
   const genres = anime.genre?.split(",").map((g) => g.trim()).filter(Boolean) ?? [];
 
@@ -83,6 +89,10 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
           </div>
         )}
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-ink via-ink/60 to-transparent" />
+        <div
+          className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-30 transition-opacity duration-500"
+          style={{ background: "linear-gradient(135deg, oklch(0.68 0.23 24 / 0.15), transparent 40%)" }}
+        />
 
         <div className="absolute left-3 top-3 z-10 flex items-center gap-1 rounded-sm border border-crimson/30 bg-ink/85 px-2 py-1 backdrop-blur-md">
           <span className="text-[10px] leading-none text-crimson-glow">★</span>
@@ -165,7 +175,7 @@ function Mikata() {
   const [featured, setFeatured] = useState<Anime[]>([]);
   const recsRef = useRef<HTMLDivElement>(null);
 
-  // Load trending from Jikan
+  // Load trending from Jikan — images included in response, no extra calls needed
   useEffect(() => {
     (async () => {
       setLoadingFeatured(true);
@@ -181,10 +191,11 @@ function Mikata() {
           type: a.type ?? "TV",
           episodes: a.episodes ?? 0,
           rating: a.score ?? 0,
+          poster: a.images?.webp?.large_image_url ?? a.images?.jpg?.large_image_url ?? null,
         }));
         setFeatured(list);
       } catch {
-        // silent fail
+        // silent fail — grid stays empty
       } finally {
         setLoadingFeatured(false);
       }
@@ -193,6 +204,7 @@ function Mikata() {
 
   const displayed = query.trim() ? results : featured;
 
+  // Debounced search
   useEffect(() => {
     const q = query.trim();
     if (!q) {
@@ -246,6 +258,7 @@ function Mikata() {
 
   return (
     <div className="relative min-h-screen">
+      {/* Fixed vertical tategaki rail */}
       <div className="pointer-events-none fixed left-3 top-1/2 z-10 hidden -translate-y-1/2 2xl:block">
         <div className="flex flex-col items-center gap-3">
           <div className="h-12 w-px bg-gradient-to-b from-transparent to-crimson/60" />
@@ -254,6 +267,7 @@ function Mikata() {
         </div>
       </div>
 
+      {/* Header */}
       <header className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0" aria-hidden>
           <div className="absolute -right-16 -top-24 select-none font-jp text-[26rem] font-black leading-none text-crimson/[0.055] animate-float-slow">
@@ -266,6 +280,7 @@ function Mikata() {
         <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-crimson to-transparent opacity-70" />
 
         <div className="relative mx-auto max-w-7xl px-6 pb-14 pt-10 sm:pt-16">
+          {/* Brand bar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="seal animate-seal h-11 w-11 rounded-md text-xl">味</div>
@@ -284,6 +299,7 @@ function Mikata() {
             </div>
           </div>
 
+          {/* Hero */}
           <div className="mt-16 grid gap-10 md:grid-cols-[1.4fr_1fr] md:items-end">
             <div className="max-w-3xl">
               <div className="mb-5 flex items-center gap-3">
@@ -321,6 +337,7 @@ function Mikata() {
             </div>
           </div>
 
+          {/* Search bar */}
           <div className="relative mt-10 max-w-2xl">
             <div className="absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-crimson/20 via-crimson-glow/25 to-crimson/20 blur-2xl" />
             <div className="flex items-center gap-3 rounded-xl border border-border bg-card/85 px-4 py-3.5 backdrop-blur-md transition-all duration-300 focus-within:border-crimson/60 focus-within:ring-2 focus-within:ring-crimson/30 focus-within:bg-card">
@@ -367,6 +384,7 @@ function Mikata() {
         <div className="hairline-divider mx-auto max-w-7xl opacity-60" />
       </header>
 
+      {/* Main */}
       <main className="relative mx-auto max-w-7xl px-6 py-14">
         <div className="mb-8 flex items-end justify-between gap-4">
           <div>
@@ -401,6 +419,7 @@ function Mikata() {
           <Grid items={displayed} onPick={pick} />
         )}
 
+        {/* Recommendations */}
         {(selected || loadingRecs) && (
           <section ref={recsRef} className="mt-24 scroll-mt-8">
             <div className="mb-10">
@@ -430,6 +449,7 @@ function Mikata() {
         )}
       </main>
 
+      {/* Footer */}
       <footer className="relative mx-auto mt-8 max-w-7xl px-6 py-10">
         <div className="hairline-divider mb-8 opacity-60" />
         <div className="flex flex-col items-center gap-3 text-center">
