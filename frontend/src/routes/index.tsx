@@ -17,24 +17,46 @@ type Anime = {
   poster?: string | null;
 };
 
+// Global poster cache
 const posterCache = new Map<number, string | null>();
+
+// Global queue — max 1 request per 350ms to respect Jikan's rate limit
+const fetchQueue: (() => void)[] = [];
+let queueRunning = false;
+
+function processQueue() {
+  if (fetchQueue.length === 0) { queueRunning = false; return; }
+  queueRunning = true;
+  const next = fetchQueue.shift()!;
+  next();
+  setTimeout(processQueue, 350);
+}
+
+function enqueueFetch(fn: () => void) {
+  fetchQueue.push(fn);
+  if (!queueRunning) processQueue();
+}
 
 async function fetchPoster(id: number): Promise<string | null> {
   if (posterCache.has(id)) return posterCache.get(id)!;
-  try {
-    const res = await fetch(`https://api.jikan.moe/v4/anime/${id}`);
-    if (!res.ok) throw new Error("no");
-    const j = await res.json();
-    const url: string | null =
-      j?.data?.images?.webp?.large_image_url ??
-      j?.data?.images?.jpg?.large_image_url ??
-      null;
-    posterCache.set(id, url);
-    return url;
-  } catch {
-    posterCache.set(id, null);
-    return null;
-  }
+  return new Promise((resolve) => {
+    enqueueFetch(async () => {
+      try {
+        const res = await fetch(`https://api.jikan.moe/v4/anime/${id}`);
+        if (!res.ok) throw new Error("no");
+        const j = await res.json();
+        const url: string | null =
+          j?.data?.images?.webp?.large_image_url ??
+          j?.data?.images?.jpg?.large_image_url ??
+          null;
+        posterCache.set(id, url);
+        resolve(url);
+      } catch {
+        posterCache.set(id, null);
+        resolve(null);
+      }
+    });
+  });
 }
 
 function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => void; index: number }) {
@@ -42,22 +64,17 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    // If poster already provided (from trending), use it directly — no API call needed
+    // If poster already provided (trending), use it directly — no API call needed
     if (anime.poster) {
       setPoster(anime.poster);
       return;
     }
     let cancelled = false;
-    const t = setTimeout(() => {
-      fetchPoster(anime.anime_id).then((url) => {
-        if (!cancelled) setPoster(url);
-      });
-    }, (index % 10) * 400);
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [anime.anime_id, anime.poster, index]);
+    fetchPoster(anime.anime_id).then((url) => {
+      if (!cancelled) setPoster(url);
+    });
+    return () => { cancelled = true; };
+  }, [anime.anime_id, anime.poster]);
 
   const genres = anime.genre?.split(",").map((g) => g.trim()).filter(Boolean) ?? [];
 
@@ -175,7 +192,7 @@ function Mikata() {
   const [featured, setFeatured] = useState<Anime[]>([]);
   const recsRef = useRef<HTMLDivElement>(null);
 
-  // Load trending from Jikan — images included in response, no extra calls needed
+  // Load trending from Jikan — images bundled in response, no extra calls
   useEffect(() => {
     (async () => {
       setLoadingFeatured(true);
@@ -195,7 +212,7 @@ function Mikata() {
         }));
         setFeatured(list);
       } catch {
-        // silent fail — grid stays empty
+        // silent fail
       } finally {
         setLoadingFeatured(false);
       }
@@ -204,7 +221,7 @@ function Mikata() {
 
   const displayed = query.trim() ? results : featured;
 
-  // Debounced search
+  // Debounced search against Django backend
   useEffect(() => {
     const q = query.trim();
     if (!q) {
