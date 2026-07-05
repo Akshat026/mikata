@@ -18,7 +18,6 @@ type Anime = {
 };
 
 const posterCache = new Map<number, string | null>();
-
 const fetchQueue: (() => void)[] = [];
 let queueRunning = false;
 
@@ -90,9 +89,7 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
             alt={anime.name}
             loading="lazy"
             onLoad={() => setLoaded(true)}
-            className={`h-full w-full object-cover transition-all duration-[900ms] group-hover:scale-[1.08] ${
-              loaded ? "opacity-100" : "opacity-0"
-            }`}
+            className={`h-full w-full object-cover transition-all duration-[900ms] group-hover:scale-[1.08] ${loaded ? "opacity-100" : "opacity-0"}`}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ink via-secondary/60 to-ink">
@@ -126,10 +123,7 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
         </h3>
         <div className="flex flex-wrap gap-1">
           {genres.slice(0, 2).map((g) => (
-            <span
-              key={g}
-              className="rounded-sm border border-crimson/25 bg-crimson/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-crimson-glow"
-            >
+            <span key={g} className="rounded-sm border border-crimson/25 bg-crimson/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-crimson-glow">
               {g}
             </span>
           ))}
@@ -138,9 +132,7 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
           <span className="tabular-nums">
             {Number.isFinite(anime.episodes) && anime.episodes > 0 ? `${anime.episodes | 0} EP` : "—"}
           </span>
-          <span className="font-jp text-crimson-glow/0 group-hover:text-crimson-glow transition-colors duration-300">
-            見る →
-          </span>
+          <span className="font-jp text-crimson-glow/0 group-hover:text-crimson-glow transition-colors duration-300">見る →</span>
         </div>
       </div>
     </button>
@@ -173,6 +165,12 @@ function GridSkeleton({ count = 12 }: { count?: number }) {
   );
 }
 
+const GithubIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+  </svg>
+);
+
 function Mikata() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Anime[]>([]);
@@ -189,9 +187,7 @@ function Mikata() {
     (async () => {
       setLoadingFeatured(true);
       try {
-        const res = await fetch(
-          "https://api.jikan.moe/v4/top/anime?type=tv&filter=bypopularity&limit=18"
-        );
+        const res = await fetch("https://api.jikan.moe/v4/top/anime?type=tv&filter=bypopularity&limit=18");
         const j = await res.json();
         const list: Anime[] = (j.data ?? []).map((a: any) => ({
           anime_id: a.mal_id,
@@ -269,16 +265,13 @@ function Mikata() {
 
       <header className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0" aria-hidden>
-          <div className="absolute -right-16 -top-24 select-none font-jp text-[26rem] font-black leading-none text-crimson/[0.055] animate-float-slow">
-            味方
-          </div>
-          <div className="absolute right-1/3 top-40 select-none font-jp text-[8rem] font-black leading-none text-crimson/[0.04] rotate-[-8deg]">
-            推
-          </div>
+          <div className="absolute -right-16 -top-24 select-none font-jp text-[26rem] font-black leading-none text-crimson/[0.055] animate-float-slow">味方</div>
+          <div className="absolute right-1/3 top-40 select-none font-jp text-[8rem] font-black leading-none text-crimson/[0.04] rotate-[-8deg]">推</div>
         </div>
         <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-crimson to-transparent opacity-70" />
 
         <div className="relative mx-auto max-w-7xl px-6 pb-14 pt-10 sm:pt-16">
+          {/* Brand bar — GitHub link in top right */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="seal animate-seal h-11 w-11 rounded-md text-xl">味</div>
@@ -290,10 +283,19 @@ function Mikata() {
                 <div className="text-[10px] uppercase tracking-[0.35em] text-muted-foreground">Your ally in anime</div>
               </div>
             </div>
-            <div className="hidden items-center gap-3 sm:flex">
-              <span className="font-jp text-xs tracking-[0.3em] text-muted-foreground">アニメ</span>
-              <span className="h-4 w-px bg-border" />
-              <span className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">est. 令和</span>
+            {/* GitHub link — always visible top right */}
+            <div className="flex items-center gap-3">
+              <span className="hidden font-jp text-xs tracking-[0.3em] text-muted-foreground sm:inline">アニメ</span>
+              <span className="hidden h-4 w-px bg-border sm:inline-block" />
+              
+                href="https://github.com/Akshat026"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/40 px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground backdrop-blur transition-all hover:border-crimson/50 hover:bg-crimson/10 hover:text-crimson-glow"
+              >
+                <GithubIcon />
+                <span className="hidden sm:inline">Akshat026</span>
+              </a>
             </div>
           </div>
 
@@ -349,9 +351,7 @@ function Mikata() {
                 className="flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground focus:outline-none"
                 autoFocus
               />
-              <span className="hidden font-jp text-[10px] uppercase tracking-[0.3em] text-muted-foreground sm:inline">
-                検索
-              </span>
+              <span className="hidden font-jp text-[10px] uppercase tracking-[0.3em] text-muted-foreground sm:inline">検索</span>
               {query && (
                 <button
                   onClick={() => setQuery("")}
@@ -455,9 +455,7 @@ function Mikata() {
             rel="noopener noreferrer"
             className="mt-2 flex items-center gap-2 rounded-full border border-border/60 bg-card/40 px-4 py-1.5 text-xs text-muted-foreground backdrop-blur transition-all hover:border-crimson/50 hover:bg-crimson/10 hover:text-crimson-glow"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
-            </svg>
+            <GithubIcon />
             github.com/Akshat026
           </a>
         </div>
