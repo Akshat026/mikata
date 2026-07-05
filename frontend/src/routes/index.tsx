@@ -17,10 +17,8 @@ type Anime = {
   poster?: string | null;
 };
 
-// Global poster cache
 const posterCache = new Map<number, string | null>();
 
-// Global queue — max 1 request per 350ms to respect Jikan's rate limit
 const fetchQueue: (() => void)[] = [];
 let queueRunning = false;
 
@@ -64,11 +62,7 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    // If poster already provided (trending), use it directly — no API call needed
-    if (anime.poster) {
-      setPoster(anime.poster);
-      return;
-    }
+    if (anime.poster) { setPoster(anime.poster); return; }
     let cancelled = false;
     fetchPoster(anime.anime_id).then((url) => {
       if (!cancelled) setPoster(url);
@@ -110,7 +104,6 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
           className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-30 transition-opacity duration-500"
           style={{ background: "linear-gradient(135deg, oklch(0.68 0.23 24 / 0.15), transparent 40%)" }}
         />
-
         <div className="absolute left-3 top-3 z-10 flex items-center gap-1 rounded-sm border border-crimson/30 bg-ink/85 px-2 py-1 backdrop-blur-md">
           <span className="text-[10px] leading-none text-crimson-glow">★</span>
           <span className="text-xs font-semibold tabular-nums leading-none">{anime.rating?.toFixed(2) ?? "—"}</span>
@@ -192,7 +185,6 @@ function Mikata() {
   const [featured, setFeatured] = useState<Anime[]>([]);
   const recsRef = useRef<HTMLDivElement>(null);
 
-  // Load trending from Jikan — images bundled in response, no extra calls
   useEffect(() => {
     (async () => {
       setLoadingFeatured(true);
@@ -221,14 +213,9 @@ function Mikata() {
 
   const displayed = query.trim() ? results : featured;
 
-  // Debounced search against Django backend
   useEffect(() => {
     const q = query.trim();
-    if (!q) {
-      setResults([]);
-      setError(null);
-      return;
-    }
+    if (!q) { setResults([]); setError(null); return; }
     const ctrl = new AbortController();
     const t = setTimeout(async () => {
       try {
@@ -243,10 +230,7 @@ function Mikata() {
         setLoadingSearch(false);
       }
     }, 300);
-    return () => {
-      ctrl.abort();
-      clearTimeout(t);
-    };
+    return () => { ctrl.abort(); clearTimeout(t); };
   }, [query]);
 
   async function pick(a: Anime) {
@@ -275,7 +259,6 @@ function Mikata() {
 
   return (
     <div className="relative min-h-screen">
-      {/* Fixed vertical tategaki rail */}
       <div className="pointer-events-none fixed left-3 top-1/2 z-10 hidden -translate-y-1/2 2xl:block">
         <div className="flex flex-col items-center gap-3">
           <div className="h-12 w-px bg-gradient-to-b from-transparent to-crimson/60" />
@@ -284,7 +267,6 @@ function Mikata() {
         </div>
       </div>
 
-      {/* Header */}
       <header className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0" aria-hidden>
           <div className="absolute -right-16 -top-24 select-none font-jp text-[26rem] font-black leading-none text-crimson/[0.055] animate-float-slow">
@@ -297,7 +279,6 @@ function Mikata() {
         <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-crimson to-transparent opacity-70" />
 
         <div className="relative mx-auto max-w-7xl px-6 pb-14 pt-10 sm:pt-16">
-          {/* Brand bar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="seal animate-seal h-11 w-11 rounded-md text-xl">味</div>
@@ -316,7 +297,6 @@ function Mikata() {
             </div>
           </div>
 
-          {/* Hero */}
           <div className="mt-16 grid gap-10 md:grid-cols-[1.4fr_1fr] md:items-end">
             <div className="max-w-3xl">
               <div className="mb-5 flex items-center gap-3">
@@ -354,7 +334,6 @@ function Mikata() {
             </div>
           </div>
 
-          {/* Search bar */}
           <div className="relative mt-10 max-w-2xl">
             <div className="absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-crimson/20 via-crimson-glow/25 to-crimson/20 blur-2xl" />
             <div className="flex items-center gap-3 rounded-xl border border-border bg-card/85 px-4 py-3.5 backdrop-blur-md transition-all duration-300 focus-within:border-crimson/60 focus-within:ring-2 focus-within:ring-crimson/30 focus-within:bg-card">
@@ -401,7 +380,6 @@ function Mikata() {
         <div className="hairline-divider mx-auto max-w-7xl opacity-60" />
       </header>
 
-      {/* Main */}
       <main className="relative mx-auto max-w-7xl px-6 py-14">
         <div className="mb-8 flex items-end justify-between gap-4">
           <div>
@@ -436,7 +414,6 @@ function Mikata() {
           <Grid items={displayed} onPick={pick} />
         )}
 
-        {/* Recommendations */}
         {(selected || loadingRecs) && (
           <section ref={recsRef} className="mt-24 scroll-mt-8">
             <div className="mb-10">
@@ -466,26 +443,25 @@ function Mikata() {
         )}
       </main>
 
-      {/* Footer */}
-<footer className="relative mx-auto mt-8 max-w-7xl px-6 py-10">
-  <div className="hairline-divider mb-8 opacity-60" />
-  <div className="flex flex-col items-center gap-3 text-center">
-    <div className="seal h-10 w-10 rounded-md text-lg">味</div>
-    <div className="font-jp text-xs uppercase tracking-[0.4em] text-muted-foreground">味方 · Mikata</div>
-    <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70">An ally for anime lovers</div>
-    
-      href="https://github.com/Akshat026"
-      target="_blank"
-      rel="noopener noreferrer"
-      className="mt-2 flex items-center gap-2 rounded-full border border-border/60 bg-card/40 px-4 py-1.5 text-xs text-muted-foreground backdrop-blur transition-all hover:border-crimson/50 hover:bg-crimson/10 hover:text-crimson-glow"
-    >
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
-      </svg>
-      github.com/Akshat026
-    </a>
-  </div>
-</footer>
+      <footer className="relative mx-auto mt-8 max-w-7xl px-6 py-10">
+        <div className="hairline-divider mb-8 opacity-60" />
+        <div className="flex flex-col items-center gap-3 text-center">
+          <div className="seal h-10 w-10 rounded-md text-lg">味</div>
+          <div className="font-jp text-xs uppercase tracking-[0.4em] text-muted-foreground">味方 · Mikata</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70">An ally for anime lovers</div>
+          
+            href="https://github.com/Akshat026"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-2 flex items-center gap-2 rounded-full border border-border/60 bg-card/40 px-4 py-1.5 text-xs text-muted-foreground backdrop-blur transition-all hover:border-crimson/50 hover:bg-crimson/10 hover:text-crimson-glow"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+            </svg>
+            github.com/Akshat026
+          </a>
+        </div>
+      </footer>
     </div>
   );
 }
