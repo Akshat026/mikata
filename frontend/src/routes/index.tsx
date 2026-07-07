@@ -321,33 +321,33 @@ function Mikata() {
         <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-crimson to-transparent opacity-70" />
 
         <div className="relative mx-auto max-w-7xl px-6 pb-14 pt-10 sm:pt-16">
-          {/* Brand bar */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="seal animate-seal h-11 w-11 rounded-md text-xl">味</div>
-              <div>
-                <div className="flex items-baseline gap-2">
-                  <span className="font-display text-2xl font-bold tracking-tight">Mikata</span>
-                  <span className="font-jp text-crimson-glow text-glow">味方</span>
-                </div>
-                <div className="text-[10px] uppercase tracking-[0.35em] text-muted-foreground">Your ally in anime</div>
-              </div>
-            </div>
-            {/* GitHub link in navbar */}
-            <div className="flex items-center gap-3">
-              <span className="hidden font-jp text-xs tracking-[0.3em] text-muted-foreground sm:inline">アニメ</span>
-              <span className="hidden h-4 w-px bg-border sm:inline-block" />
-              
-                href="https://github.com/Akshat026"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/40 px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground backdrop-blur transition-all hover:border-crimson/50 hover:bg-crimson/10 hover:text-crimson-glow"
-              >
-                <GithubIcon />
-                <span className="hidden sm:inline">Akshat026</span>
-              </a>
-            </div>
-          </div>
+{/* Brand bar */}
+<div className="flex items-center justify-between">
+  <div className="flex items-center gap-3">
+    <div className="seal animate-seal h-11 w-11 rounded-md text-xl">味</div>
+    <div>
+      <div className="flex items-baseline gap-2">
+        <span className="font-display text-2xl font-bold tracking-tight">Mikata</span>
+        <span className="font-jp text-crimson-glow text-glow">味方</span>
+      </div>
+      <div className="text-[10px] uppercase tracking-[0.35em] text-muted-foreground">Your ally in anime</div>
+    </div>
+  </div>
+  {/* GitHub link in navbar */}
+  <div className="flex items-center gap-3">
+    <span className="hidden font-jp text-xs tracking-[0.3em] text-muted-foreground sm:inline">アニメ</span>
+    <span className="hidden h-4 w-px bg-border sm:inline-block" />
+    
+      href="https://github.com/Akshat026"
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/40 px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground backdrop-blur transition-all hover:border-crimson/50 hover:bg-crimson/10 hover:text-crimson-glow"
+    >
+      <GithubIcon />
+      <span className="hidden sm:inline">Akshat026</span>
+    </a>
+  </div>
+</div>
 
           {/* Hero */}
           <div className="mt-16 grid gap-10 md:grid-cols-[1.4fr_1fr] md:items-end">
