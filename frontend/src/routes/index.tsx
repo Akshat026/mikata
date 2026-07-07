@@ -17,16 +17,13 @@ type Anime = {
   poster?: string | null;
 };
 
-// Global poster cache
 const posterCache = new Map<number, string | null>();
 
-// Batch fetch posters via AniList GraphQL — one request for all IDs at once
 async function fetchPostersForIds(ids: number[]): Promise<Map<number, string | null>> {
   const uncached = ids.filter(id => !posterCache.has(id));
   if (uncached.length === 0) {
     return new Map(ids.map(id => [id, posterCache.get(id) ?? null]));
   }
-
   const query = `
     query ($ids: [Int]) {
       Page(perPage: 50) {
@@ -37,7 +34,6 @@ async function fetchPostersForIds(ids: number[]): Promise<Map<number, string | n
       }
     }
   `;
-
   try {
     const res = await fetch("https://graphql.anilist.co", {
       method: "POST",
@@ -46,20 +42,16 @@ async function fetchPostersForIds(ids: number[]): Promise<Map<number, string | n
     });
     const j = await res.json();
     const media = j?.data?.Page?.media ?? [];
-
     for (const item of media) {
       const url = item.coverImage?.extraLarge ?? item.coverImage?.large ?? null;
       posterCache.set(item.idMal, url);
     }
-
-    // Mark unfound IDs as null so we don't retry them
     for (const id of uncached) {
       if (!posterCache.has(id)) posterCache.set(id, null);
     }
   } catch {
     for (const id of uncached) posterCache.set(id, null);
   }
-
   return new Map(ids.map(id => [id, posterCache.get(id) ?? null]));
 }
 
@@ -71,18 +63,11 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
 
   useEffect(() => {
     if (poster) return;
-
-    // Check cache first — batch fetch may have already populated it
     const cached = posterCache.get(anime.anime_id);
     if (cached !== undefined) { setPoster(cached); return; }
-
-    // Poll cache every 300ms until batch fetch completes
     const interval = setInterval(() => {
       const val = posterCache.get(anime.anime_id);
-      if (val !== undefined) {
-        setPoster(val);
-        clearInterval(interval);
-      }
+      if (val !== undefined) { setPoster(val); clearInterval(interval); }
     }, 300);
     return () => clearInterval(interval);
   }, [anime.anime_id, poster]);
@@ -99,7 +84,6 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
       <span aria-hidden className="pointer-events-none absolute right-2 top-2 z-20 h-3 w-3 border-r border-t border-crimson-glow/0 group-hover:border-crimson-glow/70 transition-colors duration-500" />
       <span aria-hidden className="pointer-events-none absolute left-2 bottom-2 z-20 h-3 w-3 border-l border-b border-crimson-glow/0 group-hover:border-crimson-glow/70 transition-colors duration-500" />
       <span aria-hidden className="pointer-events-none absolute right-2 bottom-2 z-20 h-3 w-3 border-r border-b border-crimson-glow/70" />
-
       <div className="relative aspect-[2/3] w-full overflow-hidden bg-ink">
         {poster ? (
           <img
@@ -107,9 +91,7 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
             alt={anime.name}
             loading="lazy"
             onLoad={() => setLoaded(true)}
-            className={`h-full w-full object-cover transition-all duration-[900ms] group-hover:scale-[1.08] ${
-              loaded ? "opacity-100" : "opacity-0"
-            }`}
+            className={`h-full w-full object-cover transition-all duration-[900ms] group-hover:scale-[1.08] ${loaded ? "opacity-100" : "opacity-0"}`}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ink via-secondary/60 to-ink">
@@ -133,20 +115,16 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
           <span className="font-jp">作品</span>
         </div>
       </div>
-
       <div className="relative flex flex-1 flex-col gap-2.5 p-4">
         <span className="absolute right-3 top-3 font-jp text-[10px] tracking-widest text-muted-foreground/60 tabular-nums">
-          №{String(index + 1).padStart(3, "0")}
+          {String(index + 1).padStart(3, "0")}
         </span>
         <h3 className="pr-10 font-display text-[15px] font-semibold leading-tight text-foreground line-clamp-2 group-hover:text-crimson-glow transition-colors duration-300">
           {anime.name}
         </h3>
         <div className="flex flex-wrap gap-1">
           {genres.slice(0, 2).map((g) => (
-            <span
-              key={g}
-              className="rounded-sm border border-crimson/25 bg-crimson/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-crimson-glow"
-            >
+            <span key={g} className="rounded-sm border border-crimson/25 bg-crimson/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-crimson-glow">
               {g}
             </span>
           ))}
@@ -155,9 +133,7 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
           <span className="tabular-nums">
             {Number.isFinite(anime.episodes) && anime.episodes > 0 ? `${anime.episodes | 0} EP` : "—"}
           </span>
-          <span className="font-jp text-crimson-glow/0 group-hover:text-crimson-glow transition-colors duration-300">
-            見る →
-          </span>
+          <span className="font-jp text-crimson-glow/0 group-hover:text-crimson-glow transition-colors duration-300">見る →</span>
         </div>
       </div>
     </button>
@@ -169,7 +145,6 @@ function Grid({ items, onPick }: { items: Anime[]; onPick: (a: Anime) => void })
     const idsNeedingFetch = items
       .filter(a => !a.poster && !posterCache.has(a.anime_id))
       .map(a => a.anime_id);
-
     if (idsNeedingFetch.length === 0) return;
     fetchPostersForIds(idsNeedingFetch);
   }, [items]);
@@ -199,11 +174,13 @@ function GridSkeleton({ count = 12 }: { count?: number }) {
   );
 }
 
-const GithubIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
-  </svg>
-);
+function GithubIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+    </svg>
+  );
+}
 
 function Mikata() {
   const [query, setQuery] = useState("");
@@ -217,14 +194,11 @@ function Mikata() {
   const [featured, setFeatured] = useState<Anime[]>([]);
   const recsRef = useRef<HTMLDivElement>(null);
 
-  // Load trending from Jikan with backend fallback
   useEffect(() => {
     (async () => {
       setLoadingFeatured(true);
       try {
-        const res = await fetch(
-          "https://api.jikan.moe/v4/top/anime?type=tv&filter=bypopularity&limit=18"
-        );
+        const res = await fetch("https://api.jikan.moe/v4/top/anime?type=tv&filter=bypopularity&limit=18");
         if (!res.ok) throw new Error("Jikan down");
         const j = await res.json();
         const list: Anime[] = (j.data ?? []).map((a: any) => ({
@@ -238,7 +212,6 @@ function Mikata() {
         }));
         setFeatured(list);
       } catch {
-        // Jikan failed — fall back to backend
         try {
           const fallbacks = ["naruto", "attack", "death", "one piece", "dragon"];
           for (const seed of fallbacks) {
@@ -247,9 +220,7 @@ function Mikata() {
             const list: Anime[] = j.results ?? [];
             if (list.length) { setFeatured(list); break; }
           }
-        } catch {
-          // both failed
-        }
+        } catch { /* both failed */ }
       } finally {
         setLoadingFeatured(false);
       }
@@ -258,7 +229,6 @@ function Mikata() {
 
   const displayed = query.trim() ? results : featured;
 
-  // Debounced search
   useEffect(() => {
     const q = query.trim();
     if (!q) { setResults([]); setError(null); return; }
@@ -312,44 +282,33 @@ function Mikata() {
           <div className="h-12 w-px bg-gradient-to-b from-crimson/60 to-transparent" />
         </div>
       </div>
-
       <header className="relative overflow-hidden">
         <div className="pointer-events-none absolute inset-0" aria-hidden>
           <div className="absolute -right-16 -top-24 select-none font-jp text-[26rem] font-black leading-none text-crimson/[0.055] animate-float-slow">味方</div>
           <div className="absolute right-1/3 top-40 select-none font-jp text-[8rem] font-black leading-none text-crimson/[0.04] rotate-[-8deg]">推</div>
         </div>
         <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-crimson to-transparent opacity-70" />
-
         <div className="relative mx-auto max-w-7xl px-6 pb-14 pt-10 sm:pt-16">
-{/* Brand bar */}
-<div className="flex items-center justify-between">
-  <div className="flex items-center gap-3">
-    <div className="seal animate-seal h-11 w-11 rounded-md text-xl">味</div>
-    <div>
-      <div className="flex items-baseline gap-2">
-        <span className="font-display text-2xl font-bold tracking-tight">Mikata</span>
-        <span className="font-jp text-crimson-glow text-glow">味方</span>
-      </div>
-      <div className="text-[10px] uppercase tracking-[0.35em] text-muted-foreground">Your ally in anime</div>
-    </div>
-  </div>
-  {/* GitHub link in navbar */}
-  <div className="flex items-center gap-3">
-    <span className="hidden font-jp text-xs tracking-[0.3em] text-muted-foreground sm:inline">アニメ</span>
-    <span className="hidden h-4 w-px bg-border sm:inline-block" />
-    
-      href="https://github.com/Akshat026"
-      target="_blank"
-      rel="noopener noreferrer"
-      className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/40 px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground backdrop-blur transition-all hover:border-crimson/50 hover:bg-crimson/10 hover:text-crimson-glow"
-    >
-      <GithubIcon />
-      <span className="hidden sm:inline">Akshat026</span>
-    </a>
-  </div>
-</div>
-
-          {/* Hero */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="seal animate-seal h-11 w-11 rounded-md text-xl">味</div>
+              <div>
+                <div className="flex items-baseline gap-2">
+                  <span className="font-display text-2xl font-bold tracking-tight">Mikata</span>
+                  <span className="font-jp text-crimson-glow text-glow">味方</span>
+                </div>
+                <div className="text-[10px] uppercase tracking-[0.35em] text-muted-foreground">Your ally in anime</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="hidden font-jp text-xs tracking-[0.3em] text-muted-foreground sm:inline">アニメ</span>
+              <span className="hidden h-4 w-px bg-border sm:inline-block" />
+              <a href="https://github.com/Akshat026" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full border border-border/60 bg-card/40 px-3 py-1.5 text-[10px] uppercase tracking-[0.2em] text-muted-foreground backdrop-blur transition-all hover:border-crimson/50 hover:bg-crimson/10 hover:text-crimson-glow">
+                <GithubIcon />
+                <span className="hidden sm:inline">Akshat026</span>
+              </a>
+            </div>
+          </div>
           <div className="mt-16 grid gap-10 md:grid-cols-[1.4fr_1fr] md:items-end">
             <div className="max-w-3xl">
               <div className="mb-5 flex items-center gap-3">
@@ -386,8 +345,6 @@ function Mikata() {
               </div>
             </div>
           </div>
-
-          {/* Search bar */}
           <div className="relative mt-10 max-w-2xl">
             <div className="absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-crimson/20 via-crimson-glow/25 to-crimson/20 blur-2xl" />
             <div className="flex items-center gap-3 rounded-xl border border-border bg-card/85 px-4 py-3.5 backdrop-blur-md transition-all duration-300 focus-within:border-crimson/60 focus-within:ring-2 focus-within:ring-crimson/30 focus-within:bg-card">
@@ -405,10 +362,7 @@ function Mikata() {
               />
               <span className="hidden font-jp text-[10px] uppercase tracking-[0.3em] text-muted-foreground sm:inline">検索</span>
               {query && (
-                <button
-                  onClick={() => setQuery("")}
-                  className="rounded-md border border-border/60 px-2 py-1 text-[10px] uppercase tracking-widest text-muted-foreground transition-colors hover:border-crimson/40 hover:bg-muted hover:text-foreground"
-                >
+                <button onClick={() => setQuery("")} className="rounded-md border border-border/60 px-2 py-1 text-[10px] uppercase tracking-widest text-muted-foreground transition-colors hover:border-crimson/40 hover:bg-muted hover:text-foreground">
                   clear
                 </button>
               )}
@@ -417,11 +371,7 @@ function Mikata() {
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Try</span>
                 {["Frieren", "Steins;Gate", "Vinland Saga", "Mushishi", "Monster"].map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setQuery(s)}
-                    className="rounded-full border border-border/60 bg-card/40 px-3 py-1 text-xs text-foreground/80 backdrop-blur transition-all hover:border-crimson/50 hover:bg-crimson/10 hover:text-crimson-glow"
-                  >
+                  <button key={s} onClick={() => setQuery(s)} className="rounded-full border border-border/60 bg-card/40 px-3 py-1 text-xs text-foreground/80 backdrop-blur transition-all hover:border-crimson/50 hover:bg-crimson/10 hover:text-crimson-glow">
                     {s}
                   </button>
                 ))}
@@ -431,7 +381,6 @@ function Mikata() {
         </div>
         <div className="hairline-divider mx-auto max-w-7xl opacity-60" />
       </header>
-
       <main className="relative mx-auto max-w-7xl px-6 py-14">
         <div className="mb-8 flex items-end justify-between gap-4">
           <div>
@@ -448,13 +397,11 @@ function Mikata() {
             </span>
           )}
         </div>
-
         {error && (
           <div className="mb-6 rounded-md border border-crimson/40 bg-crimson/10 p-4 text-sm text-crimson-glow">
             {error}
           </div>
         )}
-
         {showingLoader && displayed.length === 0 ? (
           <GridSkeleton count={12} />
         ) : displayed.length === 0 ? (
@@ -465,7 +412,6 @@ function Mikata() {
         ) : (
           <Grid items={displayed} onPick={pick} />
         )}
-
         {(selected || loadingRecs) && (
           <section ref={recsRef} className="mt-24 scroll-mt-8">
             <div className="mb-10">
@@ -494,19 +440,13 @@ function Mikata() {
           </section>
         )}
       </main>
-
       <footer className="relative mx-auto mt-8 max-w-7xl px-6 py-10">
         <div className="hairline-divider mb-8 opacity-60" />
         <div className="flex flex-col items-center gap-3 text-center">
           <div className="seal h-10 w-10 rounded-md text-lg">味</div>
           <div className="font-jp text-xs uppercase tracking-[0.4em] text-muted-foreground">味方 · Mikata</div>
           <div className="text-[10px] uppercase tracking-widest text-muted-foreground/70">An ally for anime lovers</div>
-          
-            href="https://github.com/Akshat026"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-2 flex items-center gap-2 rounded-full border border-border/60 bg-card/40 px-4 py-1.5 text-xs text-muted-foreground backdrop-blur transition-all hover:border-crimson/50 hover:bg-crimson/10 hover:text-crimson-glow"
-          >
+          <a href="https://github.com/Akshat026" target="_blank" rel="noopener noreferrer" className="mt-2 flex items-center gap-2 rounded-full border border-border/60 bg-card/40 px-4 py-1.5 text-xs text-muted-foreground backdrop-blur transition-all hover:border-crimson/50 hover:bg-crimson/10 hover:text-crimson-glow">
             <GithubIcon />
             github.com/Akshat026
           </a>
