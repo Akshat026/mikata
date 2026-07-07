@@ -184,28 +184,43 @@ function Mikata() {
   const recsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    (async () => {
-      setLoadingFeatured(true);
+  (async () => {
+    setLoadingFeatured(true);
+    try {
+      // Try Jikan first
+      const res = await fetch(
+        "https://api.jikan.moe/v4/top/anime?type=tv&filter=bypopularity&limit=18"
+      );
+      if (!res.ok) throw new Error("Jikan down");
+      const j = await res.json();
+      const list: Anime[] = (j.data ?? []).map((a: any) => ({
+        anime_id: a.mal_id,
+        name: a.title,
+        genre: (a.genres ?? []).map((g: any) => g.name).join(", "),
+        type: a.type ?? "TV",
+        episodes: a.episodes ?? 0,
+        rating: a.score ?? 0,
+        poster: a.images?.webp?.large_image_url ?? a.images?.jpg?.large_image_url ?? null,
+      }));
+      setFeatured(list);
+    } catch {
+      // Jikan failed — fall back to our own backend
       try {
-        const res = await fetch("https://api.jikan.moe/v4/top/anime?type=tv&filter=bypopularity&limit=18");
-        const j = await res.json();
-        const list: Anime[] = (j.data ?? []).map((a: any) => ({
-          anime_id: a.mal_id,
-          name: a.title,
-          genre: (a.genres ?? []).map((g: any) => g.name).join(", "),
-          type: a.type ?? "TV",
-          episodes: a.episodes ?? 0,
-          rating: a.score ?? 0,
-          poster: a.images?.webp?.large_image_url ?? a.images?.jpg?.large_image_url ?? null,
-        }));
-        setFeatured(list);
+        const fallbacks = ["naruto", "attack", "death", "one piece", "dragon"];
+        for (const seed of fallbacks) {
+          const res = await fetch(`${API}/search/?q=${seed}`);
+          const j = await res.json();
+          const list: Anime[] = j.results ?? [];
+          if (list.length) { setFeatured(list); break; }
+        }
       } catch {
-        // silent fail
-      } finally {
-        setLoadingFeatured(false);
+        // both failed — grid stays empty
       }
-    })();
-  }, []);
+    } finally {
+      setLoadingFeatured(false);
+    }
+  })();
+}, []);
 
   const displayed = query.trim() ? results : featured;
 
