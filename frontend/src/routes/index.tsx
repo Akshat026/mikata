@@ -26,7 +26,7 @@ function processQueue() {
   queueRunning = true;
   const next = fetchQueue.shift()!;
   next();
-  setTimeout(processQueue, 350);
+  setTimeout(processQueue, 500);
 }
 
 function enqueueFetch(fn: () => void) {
@@ -34,23 +34,29 @@ function enqueueFetch(fn: () => void) {
   if (!queueRunning) processQueue();
 }
 
-async function fetchPoster(id: number): Promise<string | null> {
+async function fetchPoster(id: number, retries = 2): Promise<string | null> {
   if (posterCache.has(id)) return posterCache.get(id)!;
   return new Promise((resolve) => {
     enqueueFetch(async () => {
-      try {
-        const res = await fetch(`https://api.jikan.moe/v4/anime/${id}`);
-        if (!res.ok) throw new Error("no");
-        const j = await res.json();
-        const url: string | null =
-          j?.data?.images?.webp?.large_image_url ??
-          j?.data?.images?.jpg?.large_image_url ??
-          null;
-        posterCache.set(id, url);
-        resolve(url);
-      } catch {
-        posterCache.set(id, null);
-        resolve(null);
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * attempt));
+          const res = await fetch(`https://api.jikan.moe/v4/anime/${id}`);
+          if (!res.ok) throw new Error(`status ${res.status}`);
+          const j = await res.json();
+          const url: string | null =
+            j?.data?.images?.webp?.large_image_url ??
+            j?.data?.images?.jpg?.large_image_url ??
+            null;
+          posterCache.set(id, url);
+          resolve(url);
+          return;
+        } catch {
+          if (attempt === retries) {
+            posterCache.set(id, null);
+            resolve(null);
+          }
+        }
       }
     });
   });
