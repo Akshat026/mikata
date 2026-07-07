@@ -17,63 +17,75 @@ type Anime = {
   poster?: string | null;
 };
 
+// Global poster cache
 const posterCache = new Map<number, string | null>();
-const fetchQueue: (() => void)[] = [];
-let queueRunning = false;
 
-function processQueue() {
-  if (fetchQueue.length === 0) { queueRunning = false; return; }
-  queueRunning = true;
-  const next = fetchQueue.shift()!;
-  next();
-  setTimeout(processQueue, 500);
-}
+// Batch fetch posters via AniList GraphQL — one request for all IDs at once
+async function fetchPostersForIds(ids: number[]): Promise<Map<number, string | null>> {
+  const uncached = ids.filter(id => !posterCache.has(id));
+  if (uncached.length === 0) {
+    return new Map(ids.map(id => [id, posterCache.get(id) ?? null]));
+  }
 
-function enqueueFetch(fn: () => void) {
-  fetchQueue.push(fn);
-  if (!queueRunning) processQueue();
-}
-
-async function fetchPoster(id: number, retries = 2): Promise<string | null> {
-  if (posterCache.has(id)) return posterCache.get(id)!;
-  return new Promise((resolve) => {
-    enqueueFetch(async () => {
-      for (let attempt = 0; attempt <= retries; attempt++) {
-        try {
-          if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * attempt));
-          const res = await fetch(`https://api.jikan.moe/v4/anime/${id}`);
-          if (!res.ok) throw new Error(`status ${res.status}`);
-          const j = await res.json();
-          const url: string | null =
-            j?.data?.images?.webp?.large_image_url ??
-            j?.data?.images?.jpg?.large_image_url ??
-            null;
-          posterCache.set(id, url);
-          resolve(url);
-          return;
-        } catch {
-          if (attempt === retries) {
-            posterCache.set(id, null);
-            resolve(null);
-          }
+  const query = `
+    query ($ids: [Int]) {
+      Page(perPage: 50) {
+        media(idMal_in: $ids, type: ANIME) {
+          idMal
+          coverImage { large extraLarge }
         }
       }
+    }
+  `;
+
+  try {
+    const res = await fetch("https://graphql.anilist.co", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, variables: { ids: uncached } }),
     });
-  });
+    const j = await res.json();
+    const media = j?.data?.Page?.media ?? [];
+
+    for (const item of media) {
+      const url = item.coverImage?.extraLarge ?? item.coverImage?.large ?? null;
+      posterCache.set(item.idMal, url);
+    }
+
+    // Mark unfound IDs as null so we don't retry them
+    for (const id of uncached) {
+      if (!posterCache.has(id)) posterCache.set(id, null);
+    }
+  } catch {
+    for (const id of uncached) posterCache.set(id, null);
+  }
+
+  return new Map(ids.map(id => [id, posterCache.get(id) ?? null]));
 }
 
 function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => void; index: number }) {
-  const [poster, setPoster] = useState<string | null>(null);
+  const [poster, setPoster] = useState<string | null>(
+    anime.poster ?? posterCache.get(anime.anime_id) ?? null
+  );
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (anime.poster) { setPoster(anime.poster); return; }
-    let cancelled = false;
-    fetchPoster(anime.anime_id).then((url) => {
-      if (!cancelled) setPoster(url);
-    });
-    return () => { cancelled = true; };
-  }, [anime.anime_id, anime.poster]);
+    if (poster) return;
+
+    // Check cache first — batch fetch may have already populated it
+    const cached = posterCache.get(anime.anime_id);
+    if (cached !== undefined) { setPoster(cached); return; }
+
+    // Poll cache every 300ms until batch fetch completes
+    const interval = setInterval(() => {
+      const val = posterCache.get(anime.anime_id);
+      if (val !== undefined) {
+        setPoster(val);
+        clearInterval(interval);
+      }
+    }, 300);
+    return () => clearInterval(interval);
+  }, [anime.anime_id, poster]);
 
   const genres = anime.genre?.split(",").map((g) => g.trim()).filter(Boolean) ?? [];
 
@@ -95,7 +107,9 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
             alt={anime.name}
             loading="lazy"
             onLoad={() => setLoaded(true)}
-            className={`h-full w-full object-cover transition-all duration-[900ms] group-hover:scale-[1.08] ${loaded ? "opacity-100" : "opacity-0"}`}
+            className={`h-full w-full object-cover transition-all duration-[900ms] group-hover:scale-[1.08] ${
+              loaded ? "opacity-100" : "opacity-0"
+            }`}
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-ink via-secondary/60 to-ink">
@@ -129,7 +143,10 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
         </h3>
         <div className="flex flex-wrap gap-1">
           {genres.slice(0, 2).map((g) => (
-            <span key={g} className="rounded-sm border border-crimson/25 bg-crimson/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-crimson-glow">
+            <span
+              key={g}
+              className="rounded-sm border border-crimson/25 bg-crimson/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-crimson-glow"
+            >
               {g}
             </span>
           ))}
@@ -138,7 +155,9 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
           <span className="tabular-nums">
             {Number.isFinite(anime.episodes) && anime.episodes > 0 ? `${anime.episodes | 0} EP` : "—"}
           </span>
-          <span className="font-jp text-crimson-glow/0 group-hover:text-crimson-glow transition-colors duration-300">見る →</span>
+          <span className="font-jp text-crimson-glow/0 group-hover:text-crimson-glow transition-colors duration-300">
+            見る →
+          </span>
         </div>
       </div>
     </button>
@@ -146,6 +165,15 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
 }
 
 function Grid({ items, onPick }: { items: Anime[]; onPick: (a: Anime) => void }) {
+  useEffect(() => {
+    const idsNeedingFetch = items
+      .filter(a => !a.poster && !posterCache.has(a.anime_id))
+      .map(a => a.anime_id);
+
+    if (idsNeedingFetch.length === 0) return;
+    fetchPostersForIds(idsNeedingFetch);
+  }, [items]);
+
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
       {items.map((a, i) => (
@@ -189,47 +217,48 @@ function Mikata() {
   const [featured, setFeatured] = useState<Anime[]>([]);
   const recsRef = useRef<HTMLDivElement>(null);
 
+  // Load trending from Jikan with backend fallback
   useEffect(() => {
-  (async () => {
-    setLoadingFeatured(true);
-    try {
-      // Try Jikan first
-      const res = await fetch(
-        "https://api.jikan.moe/v4/top/anime?type=tv&filter=bypopularity&limit=18"
-      );
-      if (!res.ok) throw new Error("Jikan down");
-      const j = await res.json();
-      const list: Anime[] = (j.data ?? []).map((a: any) => ({
-        anime_id: a.mal_id,
-        name: a.title,
-        genre: (a.genres ?? []).map((g: any) => g.name).join(", "),
-        type: a.type ?? "TV",
-        episodes: a.episodes ?? 0,
-        rating: a.score ?? 0,
-        poster: a.images?.webp?.large_image_url ?? a.images?.jpg?.large_image_url ?? null,
-      }));
-      setFeatured(list);
-    } catch {
-      // Jikan failed — fall back to our own backend
+    (async () => {
+      setLoadingFeatured(true);
       try {
-        const fallbacks = ["naruto", "attack", "death", "one piece", "dragon"];
-        for (const seed of fallbacks) {
-          const res = await fetch(`${API}/search/?q=${seed}`);
-          const j = await res.json();
-          const list: Anime[] = j.results ?? [];
-          if (list.length) { setFeatured(list); break; }
-        }
+        const res = await fetch(
+          "https://api.jikan.moe/v4/top/anime?type=tv&filter=bypopularity&limit=18"
+        );
+        if (!res.ok) throw new Error("Jikan down");
+        const j = await res.json();
+        const list: Anime[] = (j.data ?? []).map((a: any) => ({
+          anime_id: a.mal_id,
+          name: a.title,
+          genre: (a.genres ?? []).map((g: any) => g.name).join(", "),
+          type: a.type ?? "TV",
+          episodes: a.episodes ?? 0,
+          rating: a.score ?? 0,
+          poster: a.images?.webp?.large_image_url ?? a.images?.jpg?.large_image_url ?? null,
+        }));
+        setFeatured(list);
       } catch {
-        // both failed — grid stays empty
+        // Jikan failed — fall back to backend
+        try {
+          const fallbacks = ["naruto", "attack", "death", "one piece", "dragon"];
+          for (const seed of fallbacks) {
+            const res = await fetch(`${API}/search/?q=${seed}`);
+            const j = await res.json();
+            const list: Anime[] = j.results ?? [];
+            if (list.length) { setFeatured(list); break; }
+          }
+        } catch {
+          // both failed
+        }
+      } finally {
+        setLoadingFeatured(false);
       }
-    } finally {
-      setLoadingFeatured(false);
-    }
-  })();
-}, []);
+    })();
+  }, []);
 
   const displayed = query.trim() ? results : featured;
 
+  // Debounced search
   useEffect(() => {
     const q = query.trim();
     if (!q) { setResults([]); setError(null); return; }
@@ -292,7 +321,7 @@ function Mikata() {
         <div className="absolute inset-x-0 top-0 h-[2px] bg-gradient-to-r from-transparent via-crimson to-transparent opacity-70" />
 
         <div className="relative mx-auto max-w-7xl px-6 pb-14 pt-10 sm:pt-16">
-          {/* Brand bar — GitHub link in top right */}
+          {/* Brand bar */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="seal animate-seal h-11 w-11 rounded-md text-xl">味</div>
@@ -304,7 +333,7 @@ function Mikata() {
                 <div className="text-[10px] uppercase tracking-[0.35em] text-muted-foreground">Your ally in anime</div>
               </div>
             </div>
-            {/* GitHub link — always visible top right */}
+            {/* GitHub link in navbar */}
             <div className="flex items-center gap-3">
               <span className="hidden font-jp text-xs tracking-[0.3em] text-muted-foreground sm:inline">アニメ</span>
               <span className="hidden h-4 w-px bg-border sm:inline-block" />
@@ -320,6 +349,7 @@ function Mikata() {
             </div>
           </div>
 
+          {/* Hero */}
           <div className="mt-16 grid gap-10 md:grid-cols-[1.4fr_1fr] md:items-end">
             <div className="max-w-3xl">
               <div className="mb-5 flex items-center gap-3">
@@ -357,6 +387,7 @@ function Mikata() {
             </div>
           </div>
 
+          {/* Search bar */}
           <div className="relative mt-10 max-w-2xl">
             <div className="absolute -inset-1 -z-10 rounded-2xl bg-gradient-to-r from-crimson/20 via-crimson-glow/25 to-crimson/20 blur-2xl" />
             <div className="flex items-center gap-3 rounded-xl border border-border bg-card/85 px-4 py-3.5 backdrop-blur-md transition-all duration-300 focus-within:border-crimson/60 focus-within:ring-2 focus-within:ring-crimson/30 focus-within:bg-card">
