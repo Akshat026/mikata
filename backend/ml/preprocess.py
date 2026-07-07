@@ -1,12 +1,3 @@
-"""
-ml/preprocess.py
-Cleans CooperUnion's anime.csv and builds a combined 'tags' feature
-for content-based filtering.
-
-Dataset columns expected (anime.csv):
-anime_id, name, genre, type, episodes, rating, members
-"""
-
 import pandas as pd
 import numpy as np
 import os
@@ -21,56 +12,47 @@ def load_raw_data(path=RAW_PATH):
 
 
 def clean_data(df):
-    # Drop rows with no name or no genre — can't recommend on these
     df = df.dropna(subset=["name", "genre"]).copy()
-
-    # Fill missing type / episodes / rating with safe defaults
     df["type"] = df["type"].fillna("Unknown")
     df["episodes"] = df["episodes"].replace("Unknown", np.nan)
     df["episodes"] = pd.to_numeric(df["episodes"], errors="coerce")
     df["episodes"] = df["episodes"].fillna(df["episodes"].median())
     df["rating"] = df["rating"].fillna(df["rating"].mean())
-
-    # Remove duplicate anime entries by anime_id
     df = df.drop_duplicates(subset="anime_id").reset_index(drop=True)
-
     return df
 
 
 def bucket_episodes(ep):
-    """Turn episode count into a readable tag instead of a raw number."""
     if ep <= 1:
-        return "movie_length"
+        return "movie length"
     elif ep <= 13:
-        return "short_series"
+        return "short series"
     elif ep <= 26:
-        return "standard_series"
+        return "standard series"
     elif ep <= 100:
-        return "long_series"
+        return "long running series"
     else:
-        return "very_long_series"
+        return "very long running series"
 
 
 def build_tags(df):
-    # genre column looks like: "Action, Adventure, Comedy"
     df["genre_list"] = df["genre"].apply(
-        lambda g: [x.strip().replace(" ", "") for x in g.split(",")]
+        lambda g: [x.strip() for x in g.split(",")]
     )
-
-    df["type_tag"] = df["type"].apply(lambda t: t.replace(" ", ""))
+    df["type_tag"] = df["type"]
     df["episode_tag"] = df["episodes"].apply(bucket_episodes)
 
-    # Combine everything into one space-separated tag string per anime
+    # Richer natural language tags — sentence transformers understand phrases
+    # Repeat genres twice so they carry more semantic weight
     df["tags"] = df.apply(
-        lambda row: " ".join(row["genre_list"])
-        + " "
-        + row["type_tag"]
-        + " "
-        + row["episode_tag"],
+        lambda row: (
+            f"{' '.join(row['genre_list'])}. "
+            f"This is a {row['type_tag']} anime. "
+            f"It is a {row['episode_tag']}. "
+            f"Genres include {', '.join(row['genre_list'])}."
+        ),
         axis=1,
     )
-
-    df["tags"] = df["tags"].str.lower()
 
     return df
 

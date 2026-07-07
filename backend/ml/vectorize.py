@@ -2,12 +2,12 @@ import pandas as pd
 import pickle
 import os
 import numpy as np
-from sklearn.feature_extraction.text import CountVectorizer
+from sentence_transformers import SentenceTransformer
 
-PROCESSED_PATH      = os.path.join("ml", "data", "processed", "anime_cleaned.csv")
-ARTIFACTS_DIR       = os.path.join("ml", "artifacts")
-ANIME_PKL_PATH      = os.path.join(ARTIFACTS_DIR, "anime_list.pkl")
-VECTORS_PKL_PATH    = os.path.join(ARTIFACTS_DIR, "vectors.pkl")
+PROCESSED_PATH   = os.path.join("ml", "data", "processed", "anime_cleaned.csv")
+ARTIFACTS_DIR    = os.path.join("ml", "artifacts")
+ANIME_PKL_PATH   = os.path.join(ARTIFACTS_DIR, "anime_list.pkl")
+VECTORS_PKL_PATH = os.path.join(ARTIFACTS_DIR, "vectors.pkl")
 
 
 def load_cleaned_data(path=PROCESSED_PATH):
@@ -16,15 +16,22 @@ def load_cleaned_data(path=PROCESSED_PATH):
 
 
 def build_vectors(df):
-    cv = CountVectorizer(max_features=5000, stop_words="english")
-    vectors = cv.fit_transform(df["tags"]).toarray()
+    print("Loading sentence transformer model (all-MiniLM-L6-v2)...")
+    model = SentenceTransformer("all-MiniLM-L6-v2")
 
-    # Save as float32 to cut memory in half
+    print(f"Encoding {len(df)} anime tags...")
+    vectors = model.encode(
+        df["tags"].tolist(),
+        show_progress_bar=True,
+        batch_size=64,
+        convert_to_numpy=True,
+    )
+
+    # Already float32 from sentence-transformers
     vectors = vectors.astype(np.float32)
 
-    print(f"Vocabulary size : {len(cv.vocabulary_)}")
-    print(f"Vectors shape   : {vectors.shape}")
-    print(f"Vectors size    : {vectors.nbytes / 1024 / 1024:.2f} MB")
+    print(f"Vectors shape : {vectors.shape}")
+    print(f"Vectors size  : {vectors.nbytes / 1024 / 1024:.2f} MB")
 
     return vectors
 
