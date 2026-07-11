@@ -194,41 +194,42 @@ function Mikata() {
   const [featured, setFeatured] = useState<Anime[]>([]);
   const recsRef = useRef<HTMLDivElement>(null);
 
+  // Load trending from Jikan with 3 retries — no backend fallback
   useEffect(() => {
     (async () => {
       setLoadingFeatured(true);
-      try {
-        const res = await fetch("https://api.jikan.moe/v4/top/anime?type=tv&filter=bypopularity&limit=18");
-        if (!res.ok) throw new Error("Jikan down");
-        const j = await res.json();
-        const list: Anime[] = (j.data ?? []).map((a: any) => ({
-          anime_id: a.mal_id,
-          name: a.title,
-          genre: (a.genres ?? []).map((g: any) => g.name).join(", "),
-          type: a.type ?? "TV",
-          episodes: a.episodes ?? 0,
-          rating: a.score ?? 0,
-          poster: a.images?.webp?.large_image_url ?? a.images?.jpg?.large_image_url ?? null,
-        }));
-        setFeatured(list);
-      } catch {
+      let retries = 3;
+      while (retries > 0) {
         try {
-          const fallbacks = ["naruto", "attack", "death", "one piece", "dragon"];
-          for (const seed of fallbacks) {
-            const res = await fetch(`${API}/search/?q=${seed}`);
-            const j = await res.json();
-            const list: Anime[] = j.results ?? [];
-            if (list.length) { setFeatured(list); break; }
-          }
-        } catch { /* both failed */ }
-      } finally {
-        setLoadingFeatured(false);
+          const res = await fetch(
+            "https://api.jikan.moe/v4/top/anime?type=tv&filter=bypopularity&limit=18"
+          );
+          if (!res.ok) throw new Error("Jikan error");
+          const j = await res.json();
+          if (!j.data?.length) throw new Error("Empty response");
+          const list: Anime[] = j.data.map((a: any) => ({
+            anime_id: a.mal_id,
+            name: a.title,
+            genre: (a.genres ?? []).map((g: any) => g.name).join(", "),
+            type: a.type ?? "TV",
+            episodes: a.episodes ?? 0,
+            rating: a.score ?? 0,
+            poster: a.images?.webp?.large_image_url ?? a.images?.jpg?.large_image_url ?? null,
+          }));
+          setFeatured(list);
+          break;
+        } catch {
+          retries--;
+          if (retries > 0) await new Promise(r => setTimeout(r, 2000));
+        }
       }
+      setLoadingFeatured(false);
     })();
   }, []);
 
   const displayed = query.trim() ? results : featured;
 
+  // Debounced search against Django backend
   useEffect(() => {
     const q = query.trim();
     if (!q) { setResults([]); setError(null); return; }
@@ -370,7 +371,7 @@ function Mikata() {
             {!query && (
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Try</span>
-                {["Frieren", "Steins;Gate", "Vinland Saga", "Mushishi", "Monster"].map((s) => (
+                {["Death Note", "Steins;Gate", "Dragon Ball Z", "Mushishi", "Monster"].map((s) => (
                   <button key={s} onClick={() => setQuery(s)} className="rounded-full border border-border/60 bg-card/40 px-3 py-1 text-xs text-foreground/80 backdrop-blur transition-all hover:border-crimson/50 hover:bg-crimson/10 hover:text-crimson-glow">
                     {s}
                   </button>
