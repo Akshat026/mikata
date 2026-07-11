@@ -27,9 +27,7 @@ def build_vectors(df):
         convert_to_numpy=True,
     )
 
-    # Already float32 from sentence-transformers
     vectors = vectors.astype(np.float32)
-
     print(f"Vectors shape : {vectors.shape}")
     print(f"Vectors size  : {vectors.nbytes / 1024 / 1024:.2f} MB")
 

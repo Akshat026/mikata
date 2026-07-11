@@ -10,67 +10,23 @@ const API = "https://mikata-backend.onrender.com/api";
 type Anime = {
   anime_id: number;
   name: string;
+  english_name?: string | null;
   genre: string;
   type: string;
   episodes: number;
-  rating: number;
+  score: number;
+  image_url?: string | null;
   poster?: string | null;
 };
 
-const posterCache = new Map<number, string | null>();
-
-async function fetchPostersForIds(ids: number[]): Promise<Map<number, string | null>> {
-  const uncached = ids.filter(id => !posterCache.has(id));
-  if (uncached.length === 0) {
-    return new Map(ids.map(id => [id, posterCache.get(id) ?? null]));
-  }
-  const query = `
-    query ($ids: [Int]) {
-      Page(perPage: 50) {
-        media(idMal_in: $ids, type: ANIME) {
-          idMal
-          coverImage { large extraLarge }
-        }
-      }
-    }
-  `;
-  try {
-    const res = await fetch("https://graphql.anilist.co", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, variables: { ids: uncached } }),
-    });
-    const j = await res.json();
-    const media = j?.data?.Page?.media ?? [];
-    for (const item of media) {
-      const url = item.coverImage?.extraLarge ?? item.coverImage?.large ?? null;
-      posterCache.set(item.idMal, url);
-    }
-    for (const id of uncached) {
-      if (!posterCache.has(id)) posterCache.set(id, null);
-    }
-  } catch {
-    for (const id of uncached) posterCache.set(id, null);
-  }
-  return new Map(ids.map(id => [id, posterCache.get(id) ?? null]));
-}
-
 function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => void; index: number }) {
-  const [poster, setPoster] = useState<string | null>(
-    anime.poster ?? posterCache.get(anime.anime_id) ?? null
-  );
   const [loaded, setLoaded] = useState(false);
 
-  useEffect(() => {
-    if (poster) return;
-    const cached = posterCache.get(anime.anime_id);
-    if (cached !== undefined) { setPoster(cached); return; }
-    const interval = setInterval(() => {
-      const val = posterCache.get(anime.anime_id);
-      if (val !== undefined) { setPoster(val); clearInterval(interval); }
-    }, 300);
-    return () => clearInterval(interval);
-  }, [anime.anime_id, poster]);
+  // Use image_url from dataset directly — no API calls needed
+  const poster = anime.poster ?? anime.image_url ?? null;
+  const displayName = anime.english_name && anime.english_name !== "UNKNOWN"
+    ? anime.english_name
+    : anime.name;
 
   const genres = anime.genre?.split(",").map((g) => g.trim()).filter(Boolean) ?? [];
 
@@ -88,7 +44,7 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
         {poster ? (
           <img
             src={poster}
-            alt={anime.name}
+            alt={displayName}
             loading="lazy"
             onLoad={() => setLoaded(true)}
             className={`h-full w-full object-cover transition-all duration-[900ms] group-hover:scale-[1.08] ${loaded ? "opacity-100" : "opacity-0"}`}
@@ -105,7 +61,7 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
         />
         <div className="absolute left-3 top-3 z-10 flex items-center gap-1 rounded-sm border border-crimson/30 bg-ink/85 px-2 py-1 backdrop-blur-md">
           <span className="text-[10px] leading-none text-crimson-glow">★</span>
-          <span className="text-xs font-semibold tabular-nums leading-none">{anime.rating?.toFixed(2) ?? "—"}</span>
+          <span className="text-xs font-semibold tabular-nums leading-none">{anime.score?.toFixed(2) ?? "—"}</span>
         </div>
         <div className="absolute right-3 top-3 z-10 seal px-2 py-1 text-[10px] uppercase tracking-widest">
           {anime.type || "TV"}
@@ -120,7 +76,7 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
           {String(index + 1).padStart(3, "0")}
         </span>
         <h3 className="pr-10 font-display text-[15px] font-semibold leading-tight text-foreground line-clamp-2 group-hover:text-crimson-glow transition-colors duration-300">
-          {anime.name}
+          {displayName}
         </h3>
         <div className="flex flex-wrap gap-1">
           {genres.slice(0, 2).map((g) => (
@@ -141,14 +97,6 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
 }
 
 function Grid({ items, onPick }: { items: Anime[]; onPick: (a: Anime) => void }) {
-  useEffect(() => {
-    const idsNeedingFetch = items
-      .filter(a => !a.poster && !posterCache.has(a.anime_id))
-      .map(a => a.anime_id);
-    if (idsNeedingFetch.length === 0) return;
-    fetchPostersForIds(idsNeedingFetch);
-  }, [items]);
-
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
       {items.map((a, i) => (
@@ -194,7 +142,7 @@ function Mikata() {
   const [featured, setFeatured] = useState<Anime[]>([]);
   const recsRef = useRef<HTMLDivElement>(null);
 
-  // Load trending from Jikan with 3 retries — no backend fallback
+  // Load trending from Jikan with 3 retries
   useEffect(() => {
     (async () => {
       setLoadingFeatured(true);
@@ -210,10 +158,12 @@ function Mikata() {
           const list: Anime[] = j.data.map((a: any) => ({
             anime_id: a.mal_id,
             name: a.title,
+            english_name: a.title_english ?? null,
             genre: (a.genres ?? []).map((g: any) => g.name).join(", "),
             type: a.type ?? "TV",
             episodes: a.episodes ?? 0,
-            rating: a.score ?? 0,
+            score: a.score ?? 0,
+            image_url: null,
             poster: a.images?.webp?.large_image_url ?? a.images?.jpg?.large_image_url ?? null,
           }));
           setFeatured(list);
@@ -229,7 +179,7 @@ function Mikata() {
 
   const displayed = query.trim() ? results : featured;
 
-  // Debounced search against Django backend
+  // Debounced search
   useEffect(() => {
     const q = query.trim();
     if (!q) { setResults([]); setError(null); return; }
@@ -357,7 +307,7 @@ function Mikata() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search — try 'Naruto', 'Steins;Gate', 'Frieren'…"
+                placeholder="Search — try 'Frieren', 'Steins;Gate', 'Attack on Titan'…"
                 className="flex-1 bg-transparent text-base text-foreground placeholder:text-muted-foreground focus:outline-none"
                 autoFocus
               />
@@ -371,7 +321,7 @@ function Mikata() {
             {!query && (
               <div className="mt-4 flex flex-wrap items-center gap-2">
                 <span className="text-[10px] uppercase tracking-[0.3em] text-muted-foreground">Try</span>
-                {["Death Note", "Steins;Gate", "Dragon Ball Z", "Mushishi", "Monster"].map((s) => (
+                {["Frieren", "Attack on Titan", "Vinland Saga", "Steins;Gate", "Death Note"].map((s) => (
                   <button key={s} onClick={() => setQuery(s)} className="rounded-full border border-border/60 bg-card/40 px-3 py-1 text-xs text-foreground/80 backdrop-blur transition-all hover:border-crimson/50 hover:bg-crimson/10 hover:text-crimson-glow">
                     {s}
                   </button>
