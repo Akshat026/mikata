@@ -15,19 +15,64 @@ type Anime = {
   type: string;
   episodes: number;
   score: number;
-  image_url?: string | null;
   poster?: string | null;
 };
 
+const posterCache = new Map<number, string | null>();
+
+async function fetchPostersForIds(ids: number[]): Promise<void> {
+  const uncached = ids.filter(id => !posterCache.has(id));
+  if (uncached.length === 0) return;
+  const query = `
+    query ($ids: [Int]) {
+      Page(perPage: 50) {
+        media(idMal_in: $ids, type: ANIME) {
+          idMal
+          coverImage { large extraLarge }
+        }
+      }
+    }
+  `;
+  try {
+    const res = await fetch("https://graphql.anilist.co", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query, variables: { ids: uncached } }),
+    });
+    const j = await res.json();
+    const media = j?.data?.Page?.media ?? [];
+    for (const item of media) {
+      const url = item.coverImage?.extraLarge ?? item.coverImage?.large ?? null;
+      posterCache.set(item.idMal, url);
+    }
+    for (const id of uncached) {
+      if (!posterCache.has(id)) posterCache.set(id, null);
+    }
+  } catch {
+    for (const id of uncached) posterCache.set(id, null);
+  }
+}
+
 function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => void; index: number }) {
+  const [poster, setPoster] = useState<string | null>(
+    anime.poster ?? posterCache.get(anime.anime_id) ?? null
+  );
   const [loaded, setLoaded] = useState(false);
 
-  // Use image_url from dataset directly — no API calls needed
-  const poster = anime.poster ?? anime.image_url ?? null;
+  useEffect(() => {
+    if (poster) return;
+    const cached = posterCache.get(anime.anime_id);
+    if (cached !== undefined) { setPoster(cached); return; }
+    const interval = setInterval(() => {
+      const val = posterCache.get(anime.anime_id);
+      if (val !== undefined) { setPoster(val); clearInterval(interval); }
+    }, 300);
+    return () => clearInterval(interval);
+  }, [anime.anime_id, poster]);
+
   const displayName = anime.english_name && anime.english_name !== "UNKNOWN"
     ? anime.english_name
     : anime.name;
-
   const genres = anime.genre?.split(",").map((g) => g.trim()).filter(Boolean) ?? [];
 
   return (
@@ -97,6 +142,14 @@ function AnimeCard({ anime, onClick, index }: { anime: Anime; onClick: () => voi
 }
 
 function Grid({ items, onPick }: { items: Anime[]; onPick: (a: Anime) => void }) {
+  useEffect(() => {
+    const idsNeedingFetch = items
+      .filter(a => !a.poster && !posterCache.has(a.anime_id))
+      .map(a => a.anime_id);
+    if (idsNeedingFetch.length === 0) return;
+    fetchPostersForIds(idsNeedingFetch);
+  }, [items]);
+
   return (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6">
       {items.map((a, i) => (
@@ -142,16 +195,13 @@ function Mikata() {
   const [featured, setFeatured] = useState<Anime[]>([]);
   const recsRef = useRef<HTMLDivElement>(null);
 
-  // Load trending from Jikan with 3 retries
   useEffect(() => {
     (async () => {
       setLoadingFeatured(true);
       let retries = 3;
       while (retries > 0) {
         try {
-          const res = await fetch(
-            "https://api.jikan.moe/v4/top/anime?type=tv&filter=bypopularity&limit=18"
-          );
+          const res = await fetch("https://api.jikan.moe/v4/top/anime?type=tv&filter=bypopularity&limit=18");
           if (!res.ok) throw new Error("Jikan error");
           const j = await res.json();
           if (!j.data?.length) throw new Error("Empty response");
@@ -163,7 +213,6 @@ function Mikata() {
             type: a.type ?? "TV",
             episodes: a.episodes ?? 0,
             score: a.score ?? 0,
-            image_url: null,
             poster: a.images?.webp?.large_image_url ?? a.images?.jpg?.large_image_url ?? null,
           }));
           setFeatured(list);
@@ -179,7 +228,6 @@ function Mikata() {
 
   const displayed = query.trim() ? results : featured;
 
-  // Debounced search
   useEffect(() => {
     const q = query.trim();
     if (!q) { setResults([]); setError(null); return; }
