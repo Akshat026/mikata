@@ -213,7 +213,7 @@ The Render build script (`build.sh`) automatically:
 **Source:** [CooperUnion Anime Recommendations Database](https://www.kaggle.com/datasets/CooperUnion/anime-recommendations-database)
 
 - 12,232 anime titles after cleaning
-- Features used: genre, type (TV/Movie/OVA), episode count
+- Features used: genre, type (TV/Movie/OVA), episode count.
 - Transformed into natural language tags for semantic encoding
 
 ---
