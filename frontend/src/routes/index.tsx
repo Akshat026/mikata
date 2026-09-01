@@ -195,36 +195,61 @@ function Mikata() {
   const [featured, setFeatured] = useState<Anime[]>([]);
   const recsRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    (async () => {
-      setLoadingFeatured(true);
-      let retries = 3;
-      while (retries > 0) {
-        try {
-          const res = await fetch("https://api.jikan.moe/v4/top/anime?type=tv&filter=bypopularity&limit=18");
-          if (!res.ok) throw new Error("Jikan error");
-          const j = await res.json();
-          if (!j.data?.length) throw new Error("Empty response");
-          const list: Anime[] = j.data.map((a: any) => ({
-            anime_id: a.mal_id,
-            name: a.title,
-            english_name: a.title_english ?? null,
-            genre: (a.genres ?? []).map((g: any) => g.name).join(", "),
-            type: a.type ?? "TV",
-            episodes: a.episodes ?? 0,
-            score: a.score ?? 0,
-            poster: a.images?.webp?.large_image_url ?? a.images?.jpg?.large_image_url ?? null,
-          }));
-          setFeatured(list);
-          break;
-        } catch {
-          retries--;
-          if (retries > 0) await new Promise(r => setTimeout(r, 2000));
-        }
-      }
-      setLoadingFeatured(false);
-    })();
-  }, []);
+ // Hardcoded fallback — top anime by MAL popularity
+// These IDs are stable MAL IDs that will always work with AniList for posters
+const FALLBACK_TRENDING: Anime[] = [
+  { anime_id: 5114,  name: "Fullmetal Alchemist: Brotherhood", english_name: "Fullmetal Alchemist: Brotherhood", genre: "Action, Adventure, Drama, Fantasy", type: "TV", episodes: 64, score: 9.11, poster: null },
+  { anime_id: 9253,  name: "Steins;Gate", english_name: "Steins;Gate", genre: "Drama, Sci-Fi, Suspense", type: "TV", episodes: 24, score: 9.08, poster: null },
+  { anime_id: 52991, name: "Sousou no Frieren", english_name: "Frieren: Beyond Journey's End", genre: "Adventure, Drama, Fantasy", type: "TV", episodes: 28, score: 9.09, poster: null },
+  { anime_id: 38524, name: "Shingeki no Kyojin Season 3 Part 2", english_name: "Attack on Titan Season 3 Part 2", genre: "Action, Drama, Fantasy", type: "TV", episodes: 10, score: 9.10, poster: null },
+  { anime_id: 11061, name: "Hunter x Hunter (2011)", english_name: "Hunter x Hunter", genre: "Action, Adventure, Fantasy", type: "TV", episodes: 148, score: 9.05, poster: null },
+  { anime_id: 49596, name: "Kaguya-sama wa Kokurasetai: Ultra Romantic", english_name: "Kaguya-sama: Love is War Ultra Romantic", genre: "Comedy, Romance", type: "TV", episodes: 13, score: 8.91, poster: null },
+  { anime_id: 1535,  name: "Death Note", english_name: "Death Note", genre: "Mystery, Psychological, Supernatural, Suspense", type: "TV", episodes: 37, score: 8.62, poster: null },
+  { anime_id: 21,    name: "One Piece", english_name: "One Piece", genre: "Action, Adventure, Comedy, Fantasy", type: "TV", episodes: 0, score: 8.72, poster: null },
+  { anime_id: 16498, name: "Shingeki no Kyojin", english_name: "Attack on Titan", genre: "Action, Drama, Fantasy", type: "TV", episodes: 25, score: 8.53, poster: null },
+  { anime_id: 457,   name: "Mushishi", english_name: "Mushishi", genre: "Adventure, Fantasy, Mystery, Slice of Life", type: "TV", episodes: 26, score: 8.67, poster: null },
+  { anime_id: 2001,  name: "Monster", english_name: "Monster", genre: "Drama, Mystery, Psychological, Suspense", type: "TV", episodes: 74, score: 8.71, poster: null },
+  { anime_id: 37779, name: "Vinland Saga", english_name: "Vinland Saga", genre: "Action, Adventure, Drama", type: "TV", episodes: 24, score: 8.72, poster: null },
+  { anime_id: 41467, name: "Jujutsu Kaisen", english_name: "Jujutsu Kaisen", genre: "Action, Fantasy", type: "TV", episodes: 24, score: 8.62, poster: null },
+  { anime_id: 20,    name: "Naruto", english_name: "Naruto", genre: "Action, Adventure, Fantasy", type: "TV", episodes: 220, score: 7.94, poster: null },
+  { anime_id: 31964, name: "Boku no Hero Academia", english_name: "My Hero Academia", genre: "Action, Comedy", type: "TV", episodes: 13, score: 7.92, poster: null },
+  { anime_id: 22319, name: "Tokyo Ghoul", english_name: "Tokyo Ghoul", genre: "Action, Drama, Horror, Supernatural", type: "TV", episodes: 12, score: 7.80, poster: null },
+  { anime_id: 23273, name: "Sword Art Online II", english_name: "Sword Art Online II", genre: "Action, Adventure, Fantasy, Romance", type: "TV", episodes: 24, score: 7.25, poster: null },
+  { anime_id: 28977, name: "Gintama°", english_name: "Gintama°", genre: "Action, Comedy, Sci-Fi", type: "TV", episodes: 51, score: 9.06, poster: null },
+];
+
+useEffect(() => {
+  (async () => {
+    setLoadingFeatured(true);
+
+    // Show fallback immediately — don't wait for Jikan
+    setFeatured(FALLBACK_TRENDING);
+    setLoadingFeatured(false);
+
+    // Try Jikan in background — replace if successful
+    try {
+      const res = await fetch(
+        "https://api.jikan.moe/v4/top/anime?type=tv&filter=bypopularity&limit=18"
+      );
+      if (!res.ok) return;
+      const j = await res.json();
+      if (!j.data?.length) return;
+      const list: Anime[] = j.data.map((a: any) => ({
+        anime_id: a.mal_id,
+        name: a.title,
+        english_name: a.title_english ?? null,
+        genre: (a.genres ?? []).map((g: any) => g.name).join(", "),
+        type: a.type ?? "TV",
+        episodes: a.episodes ?? 0,
+        score: a.score ?? 0,
+        poster: a.images?.webp?.large_image_url ?? a.images?.jpg?.large_image_url ?? null,
+      }));
+      setFeatured(list);
+    } catch {
+      // Jikan down — fallback already showing, do nothing
+    }
+  })();
+}, []);
 
   const displayed = query.trim() ? results : featured;
 
